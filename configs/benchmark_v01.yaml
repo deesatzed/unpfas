@@ -132,12 +132,18 @@ scoring_rubric:
     max_inverted_tail_in_cradle_fraction: 0.50
     max_clamp_unbound_fraction: 0.30
   nac_criteria:
-    max_attack_dist_Asp110_Od_Ca_A: 3.30
-    min_attack_angle_deg: 155.0
+    # Ground-state Michaelis NAC calibrated to PDB 3R3V (1.56 A) where Tyr219 H-bonds to -COO- (2.74 A) prior to C-F cleavage:
+    max_attack_dist_Asp110_Od_Ca_A: 3.45
+    min_attack_angle_deg: 145.0
     max_attack_angle_deg: 180.0
-    min_cradle_hbonds: 2
-    max_cradle_H_F_dist_A: 2.50
-    max_clamp_N_O_dist_A: 3.40
+    min_cradle_hbonds: 1
+    max_cradle_H_F_dist_A: 2.65
+    max_clamp_N_O_dist_A: 3.50
+    # Secondary tight transition-state-like halide compression diagnostic:
+    ts_tight_attack_dist_A: 3.30
+    ts_tight_angle_deg: 155.0
+    ts_tight_min_hbonds: 2
+    ts_tight_H_F_dist_A: 2.50
   step2_water_check:
     max_His280_NE2_water_O_dist_A: 6.00
     max_Asp110_CG_water_O_dist_A: 5.80

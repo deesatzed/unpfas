@@ -262,10 +262,19 @@ def evaluate_fold_sanity_gate(
                 Q_pts.append(ref.zone0_residue_heavy_map_A[key])
 
     zone0_rmsd = _kabsch_rmsd(np.array(P_pts), np.array(Q_pts)) if len(P_pts) >= 4 else 99.9
-    # Experimental crystal structures carry B-factors rather than pLDDT [0, 100]
-    mean_plddt = 100.0 if is_experimental_or_homology else (float(np.mean(plddt_vals)) if plddt_vals else 0.0)
+    if is_experimental_or_homology:
+        # Do NOT fabricate pLDDT=100.0 for PDBFixer crystal-template point-mutant models; report provenance explicitly
+        return {
+            "structure_source": "crystal_3R3V_point_mutant",
+            "active_site_plddt": None,
+            "zone0_heavy_rmsd_A": round(zone0_rmsd, 3),
+            "stage_a_fold_pass": bool(zone0_rmsd <= rubric.max_zone0_heavy_rmsd_A),
+        }
+
+    mean_plddt = float(np.mean(plddt_vals)) if plddt_vals else 0.0
     passed = (mean_plddt >= rubric.min_active_site_plddt) and (zone0_rmsd <= rubric.max_zone0_heavy_rmsd_A)
     return {
+        "structure_source": "predicted_af2_or_boltz",
         "active_site_plddt": round(mean_plddt, 2),
         "zone0_heavy_rmsd_A": round(zone0_rmsd, 3),
         "stage_a_fold_pass": bool(passed),

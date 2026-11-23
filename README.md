@@ -8,9 +8,17 @@ Open-source structure- and physics-guided benchmark for triaging engineered **fl
 
 See [DESIGN.md](DESIGN.md) for the complete 3D crystallographic vector decomposition of `3R3V`, the 4-zone mutational rules (`Ile253` primary alcove gatekeeper along prochiral vector $\hat{v}_2$), the two-tier monomer-to-homodimer simulation funnel, and the two-stage scoring rubric ($S_{\text{total}} \in [0, 100]$).
 
-![Explicit-Solvent 3-Substrate Benchmark Leaderboard](results/head_to_head_tip3p/full_ladder_ranking.png)
+![Explicit-Solvent 3-Substrate Benchmark Leaderboard (v0.2 Calibrated)](results/head_to_head_tip3p/full_ladder_ranking_v02.png)
 
 ![Fluorocarbon Torsion Physics](results/smoke_test/pfba_openff_vs_mmff_torsion.png)
+
+---
+
+## Scope, Stoichiometry & `v0.2` Calibration Notes
+
+* **Pre-Synthesis Triage Scope & Reaction Stoichiometry**: Classical MD evaluates active-site pre-organization, halide-cradle hydrogen bonding, and scissile electric-field polarization ($\vec{E}_{\text{pull}}$); it does **not** directly compute covalent $\text{C–F}$ cleavage barriers (which require downstream hybrid QM/MM + wet-lab fluoride-ion & LC-MS product assays). Enzymatic $\text{S}_\text{N}2$ attack + hydrolytic $\alpha$-elimination on `PFBA` cleaves the **two $\alpha$-fluorines** ($\text{CF}_3\text{CF}_2\text{CF}_2\text{COO}^- \to \text{CF}_3\text{CF}_2\text{COCOO}^- + 2\,\text{F}^-$), functioning as an upper-pathway $\alpha$-defluorination activation step rather than single-enzyme complete mineralization.
+* **`3R3V`-Calibrated Ground-State NAC vs. Transition-State Compression**: In the `1.56 Å` crystal structure `3R3V`, `Tyr219:OH` H-bonds to the substrate carboxylate (`2.74 Å`) in the Michaelis ground state (`3.28 Å` to `F`) prior to $\text{C–F}$ bond stretching. `p_nac_pct` evaluates ground-state Michaelis pre-organization (`d ≤ 3.45 Å`, `θ ∈ [145°, 180°]`, `≥ 1` cradle donor `≤ 2.65 Å`, clamp `≤ 3.50 Å`), while `p_ts_tight_nac_pct` tracks multi-donor transition-state-like compression (`≥ 2` donors `≤ 2.50 Å`).
+* **Zero-Inflation-Free Scoring & Provenance (`v0.2`)**: Catalytically inactive controls lacking `Asp110` (`V02_D110N`) are hard-vetoed in Stage A (`S_total = 0.0`), crystal point-mutant homology models record `structure_source = crystal_3R3V_point_mutant` (`active_site_plddt = NA` unless independent AF2/Boltz-2 predictions are supplied), and every ranking table logs `total_prod_ps`, `n_frames_total`, and `top1_weight_stability_pct` across `500` $\pm 40\%$ rubric-weight perturbations.
 
 ---
 

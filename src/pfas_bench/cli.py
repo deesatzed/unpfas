@@ -193,6 +193,7 @@ def cmd_run_panel(args: argparse.Namespace) -> None:
                     equilibration_steps=args.equil_steps,
                     production_steps=args.prod_steps,
                     report_interval=args.report_interval,
+                    resume=bool(getattr(args, "resume", False)),
                 )
                 pair_reps.append(summary)
                 all_reps.append(summary)

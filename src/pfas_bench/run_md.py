@@ -1,6 +1,9 @@
 """OpenMM explicit-solvent (TIP3P-FB + PME + NaCl/CaCl2) and OBC2 MD engine."""
 
+import json
+import os
 from pathlib import Path
+import time
 from typing import Any, Dict, List, Tuple
 
 import numpy as np
@@ -238,10 +241,21 @@ def run_holo_replicate(
     report_interval: int = 100,
     timestep_fs: float = 2.0,
     random_seed: int = 42,
+    resume: bool = False,
 ) -> Dict[str, Any]:
-    """Runs minimization, equilibration, and production MD for one replicate and returns full observables."""
+    """Runs minimization, equilibration, and production MD for one replicate with live ETA & reboot-safe XML checkpoints."""
     out_p = Path(out_dir)
     out_p.mkdir(parents=True, exist_ok=True)
+
+    rep_summary_json = out_p / f"rep{replicate_id:02d}_summary.json"
+    if resume and rep_summary_json.exists():
+        with open(rep_summary_json, "r", encoding="utf-8") as fh:
+            cached_rep = json.load(fh)
+        print(
+            f"   [resume] Loaded finished {receptor.variant.id} + {ligand.spec.id} (rep {replicate_id})",
+            flush=True,
+        )
+        return cached_rep
 
     top, pos, system, lig_offset, has_explicit_water = build_holo_openmm_system(
         receptor=receptor,
@@ -281,30 +295,59 @@ def run_holo_replicate(
             except Exception:
                 sim_obj = app.Simulation(top, system, integ)
 
-        sim_obj.context.setPositions(pos)
-        sim_obj.minimizeEnergy(
-            tolerance=5.0 * ounit.kilojoules_per_mole / ounit.nanometer,
-            maxIterations=5000,
-        )
-        m_state = sim_obj.context.getState(getPositions=True, getEnergy=True, enforcePeriodicBox=has_explicit_water)
-        e_min_val = m_state.getPotentialEnergy().value_in_unit(ounit.kilocalories_per_mole)
-
         m_pdb = out_p / f"rep{replicate_id:02d}_minimized.pdb"
-        with open(m_pdb, "w", encoding="utf-8") as fh:
-            app.PDBFile.writeFile(top, m_state.getPositions(), fh, keepIds=True)
-
-        sim_obj.context.setVelocitiesToTemperature(0.5 * temperature_K * ounit.kelvin, seed_val)
-        sim_obj.step(250)
-        sim_obj.context.setVelocitiesToTemperature(temperature_K * ounit.kelvin, seed_val + 17)
-        if equilibration_steps > 0:
-            sim_obj.step(int(equilibration_steps))
+        chk_xml = out_p / f"rep{replicate_id:02d}_checkpoint.xml"
+        chk_meta = out_p / f"rep{replicate_id:02d}_checkpoint_frames.json"
 
         n_fr = max(1, int(production_steps) // int(report_interval))
         f_recs: List[Dict[str, float | bool]] = []
         ca_list: List[np.ndarray] = []
+        start_fr = 0
+        e_min_val = 0.0
 
-        for _ in range(n_fr):
-            sim_obj.step(int(report_interval))
+        # Portable XML state resume (survives macOS updates, driver changes, and reboots!)
+        if resume and chk_xml.exists() and chk_meta.exists() and not use_cpu_fallback:
+            with open(chk_meta, "r", encoding="utf-8") as fh:
+                saved = json.load(fh)
+            if int(saved.get("n_fr", -1)) == n_fr and int(saved.get("report_interval", -1)) == int(report_interval):
+                sim_obj.loadState(str(chk_xml))
+                f_recs = list(saved["frame_records"])
+                ca_list = [np.array(pt, dtype=float) for pt in saved["ca_list"]]
+                start_fr = len(f_recs)
+                e_min_val = float(saved.get("e_min_val", 0.0))
+                pct_res = 100.0 * start_fr / n_fr
+                print(
+                    f"      [resume-mid-clip] Resumed rep {replicate_id} at frame {start_fr}/{n_fr} ({pct_res:.1f}%)",
+                    flush=True,
+                )
+
+        if start_fr == 0:
+            sim_obj.context.setPositions(pos)
+            sim_obj.minimizeEnergy(
+                tolerance=5.0 * ounit.kilojoules_per_mole / ounit.nanometer,
+                maxIterations=5000,
+            )
+            m_state = sim_obj.context.getState(getPositions=True, getEnergy=True, enforcePeriodicBox=has_explicit_water)
+            e_min_val = m_state.getPotentialEnergy().value_in_unit(ounit.kilocalories_per_mole)
+
+            with open(m_pdb, "w", encoding="utf-8") as fh:
+                app.PDBFile.writeFile(top, m_state.getPositions(), fh, keepIds=True)
+
+            sim_obj.context.setVelocitiesToTemperature(0.5 * temperature_K * ounit.kelvin, seed_val)
+            sim_obj.step(250)
+            sim_obj.context.setVelocitiesToTemperature(temperature_K * ounit.kelvin, seed_val + 17)
+            if equilibration_steps > 0:
+                sim_obj.step(int(equilibration_steps))
+
+        # Log progress & save reboot-safe checkpoint roughly every 5% (or every >= 90 seconds on long runs)
+        log_stride = max(1, n_fr // 20)
+        t_loop_start = time.monotonic()
+        t_last_log = t_loop_start
+        steps_per_frame = int(report_interval)
+        total_ns = (n_fr * steps_per_frame * eff_dt_ps) / 1000.0
+
+        for fr_idx in range(start_fr, n_fr):
+            sim_obj.step(steps_per_frame)
             st_cur = sim_obj.context.getState(getPositions=True, enforcePeriodicBox=has_explicit_water)
             p_A = st_cur.getPositions(asNumpy=True).value_in_unit(ounit.angstrom)
             b_diag = None
@@ -312,9 +355,63 @@ def run_holo_replicate(
                 bv = st_cur.getPeriodicBoxVectors(asNumpy=True).value_in_unit(ounit.angstrom)
                 b_diag = np.array([bv[0, 0], bv[1, 1], bv[2, 2]], dtype=float)
             f_recs.append(evaluate_snapshot(p_A, imap, rubric, box_diag_A=b_diag))
-            # Track ligand C_alpha displacement relative to catalytic residue 110 CG under MIC (avoids PBC wrap jumps)
             rel_ca = _mic_disp(p_A[imap.lig_ca_idx] - p_A[imap.asp110_cg_idx], b_diag)
             ca_list.append(rel_ca.copy())
+
+            done_fr = fr_idx + 1
+            now = time.monotonic()
+            should_checkpoint = (
+                production_steps >= 10000
+                and ((done_fr % log_stride == 0) or (now - t_last_log >= 120.0))
+                and done_fr < n_fr
+            )
+            if should_checkpoint:
+                t_last_log = now
+                elapsed_s = max(1e-3, now - t_loop_start)
+                done_since_resume = done_fr - start_fr
+                steps_per_s = (done_since_resume * steps_per_frame) / elapsed_s
+                ns_per_day = (steps_per_s * eff_dt_ps * 86400.0) / 1000.0
+                rem_steps = (n_fr - done_fr) * steps_per_frame
+                eta_s = rem_steps / max(1e-3, steps_per_s)
+                eta_h, eta_rem = divmod(int(eta_s), 3600)
+                eta_m = eta_rem // 60
+                eta_str = f"{eta_h}h {eta_m:02d}m" if eta_h > 0 else f"{eta_m}m {eta_rem % 60:02d}s"
+
+                cur_ns = (done_fr * steps_per_frame * eff_dt_ps) / 1000.0
+                pct = 100.0 * done_fr / n_fr
+                live_nac = 100.0 * float(np.mean([r["is_nac"] for r in f_recs]))
+                live_ang = float(np.mean([r["ang_SN2_deg"] for r in f_recs]))
+                live_epull = float(np.mean([r["E_pull_MV_cm"] for r in f_recs]))
+
+                # Atomic portable XML checkpoint write
+                tmp_xml = out_p / f"rep{replicate_id:02d}_checkpoint.xml.tmp"
+                tmp_meta = out_p / f"rep{replicate_id:02d}_checkpoint_frames.json.tmp"
+                sim_obj.saveState(str(tmp_xml))
+                with open(tmp_meta, "w", encoding="utf-8") as fh:
+                    json.dump(
+                        {
+                            "n_fr": n_fr,
+                            "report_interval": steps_per_frame,
+                            "e_min_val": e_min_val,
+                            "frame_records": f_recs,
+                            "ca_list": [c.tolist() for c in ca_list],
+                        },
+                        fh,
+                    )
+                os.replace(tmp_xml, chk_xml)
+                os.replace(tmp_meta, chk_meta)
+
+                print(
+                    f"      [{pct:5.1f}% | {cur_ns:.2f}/{total_ns:.2f} ns] "
+                    f"speed={ns_per_day:.1f} ns/day | clip ETA={eta_str} | "
+                    f"so far: P_NAC={live_nac:.1f}%, mean_ang={live_ang:.1f}deg, E_pull={live_epull:+.1f} MV/cm",
+                    flush=True,
+                )
+
+        # Clean up temporary mid-clip checkpoint files once replicate finishes cleanly
+        for f_cleanup in (chk_xml, chk_meta):
+            if f_cleanup.exists():
+                f_cleanup.unlink()
 
         return e_min_val, m_pdb, f_recs, np.array(ca_list, dtype=float)
 
@@ -322,11 +419,23 @@ def run_holo_replicate(
         e_min_kcal, min_pdb, frame_records, ca_arr = _execute_trajectory(use_cpu_fallback=False, seed_offset=0)
     except openmm.OpenMMException:
         e_min_kcal, min_pdb, frame_records, ca_arr = _execute_trajectory(use_cpu_fallback=True, seed_offset=101)
-    summary = summarize_trajectory_frames(frame_records, ca_arr, rubric, has_explicit_water=has_explicit_water)
+    eff_dt_fs = min(float(timestep_fs), 1.0)
+    summary = summarize_trajectory_frames(
+        frame_records,
+        ca_arr,
+        rubric,
+        has_explicit_water=has_explicit_water,
+        has_anionic_asp110=imap.has_anionic_asp110,
+    )
     summary.update({
         "variant_id": receptor.variant.id,
         "substrate_id": ligand.spec.id,
         "replicate_id": int(replicate_id),
+        "random_seed": int(random_seed + replicate_id),
+        "timestep_fs": round(eff_dt_fs, 3),
+        "equil_duration_ps": round(int(equilibration_steps) * eff_dt_fs * 1e-3, 4),
+        "sim_duration_ps": round(int(production_steps) * eff_dt_fs * 1e-3, 4),
+        "report_interval_steps": int(report_interval),
         "assembly": receptor.assembly,
         "solvent_mode": solvent_mode,
         "pH": receptor.ph,
@@ -337,4 +446,8 @@ def run_holo_replicate(
         "e_min_kcal_mol": round(float(e_min_kcal), 2),
         "minimized_pdb": str(min_pdb),
     })
+    tmp_rep = out_p / f"rep{replicate_id:02d}_summary.json.tmp"
+    with open(tmp_rep, "w", encoding="utf-8") as fh:
+        json.dump(summary, fh, indent=2)
+    os.replace(tmp_rep, rep_summary_json)
     return summary

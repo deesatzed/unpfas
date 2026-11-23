@@ -159,10 +159,13 @@ def evaluate_snapshot(
     for idx_f in imap.lig_f_alpha_indices:
         r_f = r_ca + _mic_disp(pos_A[idx_f] - r_ca, box_diag_A)
         n_hb = 0
+        n_hb_ts = 0
         for ih in imap.cradle_H_indices:
             dh = float(np.linalg.norm(_mic_disp(pos_A[ih] - r_f, box_diag_A)))
             if dh <= rubric.max_cradle_H_F_dist_A:
                 n_hb += 1
+            if dh <= rubric.ts_tight_H_F_dist_A:
+                n_hb_ts += 1
 
         od_candidates = []
         for iod in imap.asp110_attack_O_indices:
@@ -174,6 +177,7 @@ def evaluate_snapshot(
         u_f = (r_f - r_ca) / np.linalg.norm(r_f - r_ca)
         ang = math.degrees(math.acos(max(-1.0, min(1.0, float(np.dot(u_od, u_f))))))
 
+        # Ground-state Michaelis NAC (calibrated to 3R3V where Tyr219 H-bonds to -COO- at 2.74 A)
         is_nac = (
             imap.has_anionic_asp110
             and (d_att <= rubric.max_attack_dist_A)
@@ -181,19 +185,27 @@ def evaluate_snapshot(
             and (n_hb >= rubric.min_cradle_hbonds)
             and (d_clamp <= rubric.max_clamp_N_O_dist_A)
         )
+        # Tight transition-state-like multi-donor halide compression diagnostic
+        is_ts_tight = (
+            imap.has_anionic_asp110
+            and (d_att <= rubric.ts_tight_attack_dist_A)
+            and (rubric.ts_tight_angle_deg <= ang <= rubric.max_attack_angle_deg)
+            and (n_hb_ts >= rubric.ts_tight_min_hbonds)
+            and (d_clamp <= 3.40)
+        )
         is_near_nac = (
             imap.has_anionic_asp110
-            and (d_att <= rubric.max_attack_dist_A + 0.25)
+            and (d_att <= rubric.max_attack_dist_A + 0.15)
             and (135.0 <= ang <= 180.0)
             and (n_hb >= 1)
-            and (d_clamp <= rubric.max_clamp_N_O_dist_A + 0.20)
+            and (d_clamp <= rubric.max_clamp_N_O_dist_A + 0.15)
         )
-        rank_key = (int(is_nac), int(is_near_nac), n_hb, ang, -d_att)
+        rank_key = (int(is_ts_tight), int(is_nac), int(is_near_nac), n_hb, ang, -d_att)
         if best_tuple is None or rank_key > best_tuple[0]:
-            best_tuple = (rank_key, r_f, d_att, ang, n_hb, is_nac, is_near_nac)
+            best_tuple = (rank_key, r_f, d_att, ang, n_hb, is_nac, is_ts_tight, is_near_nac)
 
     assert best_tuple is not None
-    _, r_f_sc, d_att, ang_att, n_hb, is_nac, is_near_nac = best_tuple
+    _, r_f_sc, d_att, ang_att, n_hb, is_nac, is_ts_tight, is_near_nac = best_tuple
 
     # 3. Scissile C-F midpoint electric field projection (E_pull = -E . u_{Ca->F} in MV/cm)
     r_mid = 0.5 * (r_ca + r_f_sc)
@@ -249,6 +261,7 @@ def evaluate_snapshot(
         "cradle_hbonds": float(n_hb),
         "d_clamp_A": d_clamp,
         "is_nac": float(is_nac),
+        "is_ts_tight_nac": float(is_ts_tight),
         "is_near_nac": float(is_near_nac),
         "E_pull_MV_cm": e_pull,
         "step2_water_ok": float(step2_water_ok),
@@ -262,12 +275,14 @@ def summarize_trajectory_frames(
     ca_coords_A: np.ndarray,
     rubric: RubricSpec,
     has_explicit_water: bool = True,
+    has_anionic_asp110: bool = True,
 ) -> Dict[str, float | bool]:
     """Aggregates per-frame metrics into production trajectory observables and Stage-A2 veto status."""
     if not frame_records:
         raise ValueError("No trajectory frames recorded for summary.")
 
     p_nac = float(np.mean([r["is_nac"] for r in frame_records]))
+    p_ts_tight = float(np.mean([r.get("is_ts_tight_nac", 0.0) for r in frame_records]))
     p_near_nac = float(np.mean([r.get("is_near_nac", r["is_nac"]) for r in frame_records]))
     nac_e = [float(r["E_pull_MV_cm"]) for r in frame_records if r["is_nac"] > 0.5]
     all_e = [float(r["E_pull_MV_cm"]) for r in frame_records]
@@ -281,15 +296,18 @@ def summarize_trajectory_frames(
     ca_rmsf = float(np.sqrt(np.mean(np.sum((ca_coords_A - mean_ca) ** 2, axis=1))))
 
     stage_a_pose_pass = (
-        (f_inverted <= rubric.max_inverted_tail_in_cradle_fraction)
+        bool(has_anionic_asp110)
+        and (f_inverted <= rubric.max_inverted_tail_in_cradle_fraction)
         and (f_unbound <= rubric.max_clamp_unbound_fraction)
     )
 
     return {
         "n_frames": len(frame_records),
         "has_explicit_water": bool(has_explicit_water),
+        "has_anionic_asp110": bool(has_anionic_asp110),
         "p_nac_fraction": round(p_nac, 4),
         "p_nac_pct": round(100.0 * p_nac, 2),
+        "p_ts_tight_nac_pct": round(100.0 * p_ts_tight, 2),
         "p_near_nac_pct": round(100.0 * p_near_nac, 2),
         "mean_E_pull_MV_cm": round(float(np.mean(all_e)), 2),
         "nac_E_pull_MV_cm": round(e_proj_mean, 2),
