@@ -1,0 +1,4 @@
+compound_id,name,role,SMILES
+MFA,Monofluoroacetate,Fast WT positive control,FCC(=O)O
+DFA,Difluoroacetate,Slow gem-difluoro bridge control,FC(F)C(=O)O
+PFBA,Perfluorobutanoate,C4 perfluoroalkyl stretch target,FC(F)(F)C(F)(F)C(F)(F)C(=O)O

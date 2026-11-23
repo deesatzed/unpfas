@@ -1,0 +1,8 @@
+Cheminformatics Physics Skill License & Attribution Notification
+Timestamp: 2026-11-22T09:54:30-05:00
+Tools & Data Sources:
+- AutoDock Vina: Apache 2.0 (Trott & Olson 2010; Eberhardt et al. 2021)
+- Open Babel: GPLv2 (https://openbabel.org/; O'Boyle et al. 2011)
+- OpenMM & PDBFixer: MIT and LGPL (Eastman et al. 2017)
+- OpenFF Sage (openff-2.2.0): Open Force Field Initiative (MIT)
+- RCSB PDB: https://www.rcsb.org/pages/policies

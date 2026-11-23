@@ -1,0 +1,7 @@
+variant,substrate,charge_method,e_init_kcal_mol,e_min_kcal_mol,ca_shift_after_min_A,mean_d_attack_A,min_d_attack_A,mean_ang_SN2_deg,max_ang_SN2_deg,mean_cradle_hbonds,mean_clamp_dist_A,p_nac_strict_pct,p_nac_near_pct,mean_E_pull_MV_cm,ca_rmsf_A,inverted_pose_pct,minimized_pdb
+WT,MFA,openff-gnn-am1bcc-0.1.0-rc.3.pt,-2309.9,-9631.5,0.948,3.619,2.989,91.0,132.9,0.72,2.791,0.0,0.0,36.3,0.595,0.0,/Users/o2satz/antigravity/pfas/results/smoke_test/holo_WT_MFA_minimized.pdb
+I253A,MFA,openff-gnn-am1bcc-0.1.0-rc.3.pt,-2255.2,-9601.1,0.947,3.628,3.114,96.8,140.3,0.58,2.772,0.0,0.0,37.0,0.705,0.0,/Users/o2satz/antigravity/pfas/results/smoke_test/holo_I253A_MFA_minimized.pdb
+WT,DFA,openff-gnn-am1bcc-0.1.0-rc.3.pt,-2231.5,-9597.9,1.501,3.722,3.398,111.6,137.1,0.46,2.75,0.0,0.0,12.2,0.446,0.0,/Users/o2satz/antigravity/pfas/results/smoke_test/holo_WT_DFA_minimized.pdb
+I253A,DFA,openff-gnn-am1bcc-0.1.0-rc.3.pt,-2174.3,-9573.7,1.51,3.752,3.405,99.6,137.6,0.6,2.749,0.0,0.0,-9.7,0.347,0.0,/Users/o2satz/antigravity/pfas/results/smoke_test/holo_I253A_DFA_minimized.pdb
+WT,PFBA,openff-gnn-am1bcc-0.1.0-rc.3.pt,-1823.0,-9582.5,1.281,3.451,3.071,87.6,103.4,0.22,2.804,0.0,0.0,-18.7,0.651,40.0,/Users/o2satz/antigravity/pfas/results/smoke_test/holo_WT_PFBA_minimized.pdb
+I253A,PFBA,openff-gnn-am1bcc-0.1.0-rc.3.pt,-1823.4,-9555.3,1.017,3.679,3.094,83.4,105.1,0.3,2.832,0.0,0.0,-23.3,0.68,42.0,/Users/o2satz/antigravity/pfas/results/smoke_test/holo_I253A_PFBA_minimized.pdb

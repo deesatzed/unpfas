@@ -1,0 +1,4 @@
+RCSB Protein Data Bank Usage Policy Notification
+Timestamp: 2026-11-22T06:27:30-05:00
+Notice: Structural coordinate data (PDB entries 3R3V, 3R3U) retrieved via RCSB PDB.
+Terms of Use: https://www.rcsb.org/pages/usage-policy

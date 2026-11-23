@@ -1,0 +1,4 @@
+compound_id,input_smiles,protonated_smiles,SMILES_pH,ph,net_charge,positive_charges,negative_charges,is_zwitterion,species_class,cLogP_neutral,ionized_sites
+MFA,O=C(O)CF,O=C([O-])CF,O=C([O-])CF,7.4,-1,0,1,False,anion,0.041,"[{""atom_idx"": 4, ""element"": ""O"", ""old_charge"": 0, ""new_charge"": -1}]"
+DFA,O=C(O)C(F)F,O=C([O-])C(F)F,O=C([O-])C(F)F,7.4,-1,0,1,False,anion,0.336,"[{""atom_idx"": 5, ""element"": ""O"", ""old_charge"": 0, ""new_charge"": -1}]"
+PFBA,O=C(O)C(F)(F)C(F)(F)C(F)(F)F,O=C([O-])C(F)(F)C(F)(F)C(F)(F)F,O=C([O-])C(F)(F)C(F)(F)C(F)(F)F,7.4,-1,0,1,False,anion,1.904,"[{""atom_idx"": 12, ""element"": ""O"", ""old_charge"": 0, ""new_charge"": -1}]"

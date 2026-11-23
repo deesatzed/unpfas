@@ -1,0 +1,148 @@
+project: pfas-rpa1163-defluor-bench
+version: "0.1.0"
+
+scaffold:
+  name: RPA1163
+  organism: Rhodopseudomonas palustris
+  uniprot_id: Q6NAM1
+  pdb_holo_template: 3R3V
+  pdb_apo_reference: 3R3U
+  cif_holo_path: data/structures/pdb_00003r3v.cif
+  cif_apo_path: data/structures/pdb_00003r3u.cif
+  catalytic_chain: A
+  allosteric_partner_chain: B
+  wt_reversion:
+    chain: A
+    auth_seq_id: 110
+    from_resname: ASN
+    to_resname: ASP
+
+zones:
+  zone_0_immutable_core:
+    catalytic_triad: [110, 134, 280]
+    halide_cradle: [155, 156, 219]
+    carboxylate_clamp: [111, 114]
+  zone_1_alcove_wall: [40, 135, 141, 153, 253]
+  zone_2_buttressing: [109, 281]
+  zone_3_cap_gate: [181, 185]
+
+ligands:
+  charge_method_priority:
+    - "openff-gnn-am1bcc-0.1.0-rc.3.pt"
+    - "am1bcc"
+    - "mmff94s_fallback"
+  torsion_sweep_step_deg: 15.0
+  max_anti_torsion_penalty_kcal_mol: 3.0
+  substrates:
+    - id: MFA
+      name: monofluoroacetate
+      role: fast_positive_control
+      smiles: "O=C([O-])CF"
+      formal_charge: -1
+    - id: DFA
+      name: difluoroacetate
+      role: slow_bridge_control
+      smiles: "O=C([O-])C(F)F"
+      formal_charge: -1
+    - id: PFBA
+      name: perfluorobutanoate
+      role: c4_pfas_stretch_target
+      smiles: "O=C([O-])C(F)(F)C(F)(F)C(F)(F)F"
+      formal_charge: -1
+
+variants:
+  - id: V01_WT
+    mutations: {}
+    role: wild_type_baseline
+  - id: V02_D110N
+    mutations: {110: "ASN"}
+    role: dead_nucleophile_negative_control
+  - id: V03_K181M_W185Y
+    mutations: {181: "MET", 185: "TYR"}
+    role: evolved_cap_gate_control
+  - id: V04_I253V
+    mutations: {253: "VAL"}
+    role: conservative_v2_relief
+  - id: V05_I253A
+    mutations: {253: "ALA"}
+    role: primary_v2_alcove_carve
+  - id: V06_I253G
+    mutations: {253: "GLY"}
+    role: over_carving_water_flooding_control
+  - id: V07_I253A_I135V
+    mutations: {253: "ALA", 135: "VAL"}
+    role: dual_v2_and_backside_relief
+  - id: V08_I253A_Y141F
+    mutations: {253: "ALA", 141: "PHE"}
+    role: alcove_carve_plus_apolar_distal_rim
+  - id: V09_I253A_W185F
+    mutations: {253: "ALA", 185: "PHE"}
+    role: alcove_carve_plus_cap_wall_slim
+  - id: V10_I253A_K181M_W185Y
+    mutations: {253: "ALA", 181: "MET", 185: "TYR"}
+    role: alcove_carve_plus_allosteric_gate_triple
+  - id: V11_V10_I153V
+    mutations: {253: "ALA", 181: "MET", 185: "TYR", 153: "VAL"}
+    role: round2_conservative_ile153_vise_trim
+  - id: V12_V10_I153A_Y141L
+    mutations: {253: "ALA", 181: "MET", 185: "TYR", 153: "ALA", 141: "LEU"}
+    role: round2_bilateral_vise_release
+  - id: V13_V10_I153A_Y141A_F40L
+    mutations: {253: "ALA", 181: "MET", 185: "TYR", 153: "ALA", 141: "ALA", 40: "LEU"}
+    role: round2_full_lever_and_rim_release
+
+simulation_funnel:
+  forcefields:
+    protein: amber14-all.xml
+    water: amber14/tip3pfb.xml
+    small_molecule: openff-2.2.0.offxml
+  box_padding_nm: 1.0
+  nonbonded_cutoff_nm: 0.9
+  timestep_fs: 2.0
+  tier_1_monomer_screen:
+    assembly: chain_A_monomer
+    solvent_mode: explicit_tip3pfb
+    outer_shell_restraint_kcal_mol_A2: 0.5
+    outer_shell_cutoff_from_ligand_A: 15.0
+    replicates: 3
+    equilibration_ps: 100.0
+    production_ns: 50.0
+    temperature_K: 300.0
+    pH: 7.5
+    ionic_strength_M: 0.15
+    divalent_CaCl2_mM: 0.0
+  tier_2_homodimer_validation:
+    top_fraction: 0.20
+    assembly: asymmetric_homodimer_AB
+    solvent_mode: explicit_tip3pfb
+    replicates: 3
+    equilibration_ps: 250.0
+    production_ns: 200.0
+    ionic_strength_M: 0.15
+    matrix_conditions:
+      - {name: std_bioreactor, pH: 7.5, temperature_K: 303.0, divalent_CaCl2_mM: 0.0}
+      - {name: cold_groundwater, pH: 7.5, temperature_K: 288.0, divalent_CaCl2_mM: 0.0}
+      - {name: acidic_soil, pH: 5.5, temperature_K: 288.0, divalent_CaCl2_mM: 0.0}
+      - {name: hard_groundwater_Ca, pH: 7.5, temperature_K: 288.0, divalent_CaCl2_mM: 10.0}
+
+scoring_rubric:
+  stage_a_vetoes:
+    min_active_site_plddt: 85.0
+    max_zone0_heavy_rmsd_A: 0.80
+    max_inverted_tail_in_cradle_fraction: 0.50
+    max_clamp_unbound_fraction: 0.30
+  nac_criteria:
+    max_attack_dist_Asp110_Od_Ca_A: 3.30
+    min_attack_angle_deg: 155.0
+    max_attack_angle_deg: 180.0
+    min_cradle_hbonds: 2
+    max_cradle_H_F_dist_A: 2.50
+    max_clamp_N_O_dist_A: 3.40
+  step2_water_check:
+    max_His280_NE2_water_O_dist_A: 6.00
+    max_Asp110_CG_water_O_dist_A: 5.80
+  weights:
+    p_nac: 35.0
+    e_proj_scissile_cf: 25.0
+    r_pose_and_step2_water: 20.0
+    m_matrix_robustness: 20.0
